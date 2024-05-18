@@ -1,19 +1,21 @@
 package main
 
 import (
+	"fmt"
+	"log"
+	"main/bencode_parser"
 	"os"
 )
 
-type Beencode struct {
-}
-
 func main() {
 	if len(os.Args) < 2 {
-		panic("Usage: torrent <torrent file>")
+		log.Fatal("Usage: torrent <torrent file>")
 	}
 	torrentPath := os.Args[1]
-	if torrentPath == "" {
-		panic("Usage: torrent <torrent file>")
+	torrentBuff, err := os.ReadFile(torrentPath)
+	if err != nil {
+		log.Fatal("Error reading torrent file:", err)
 	}
-	println(torrentPath)
+	res := bencode_parser.Marshall(torrentBuff)
+	fmt.Println(res)
 }
