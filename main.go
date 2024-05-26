@@ -1,21 +1,19 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"main/bencode_parser"
+	"main/torrent"
 	"os"
 )
 
 func main() {
 	if len(os.Args) < 2 {
-		log.Fatal("Usage: torrent <torrent file>")
+		log.Fatal("MISSING TORRENT FILE PATH, Usage: torrent <torrent file path>")
 	}
 	torrentPath := os.Args[1]
-	torrentBuff, err := os.ReadFile(torrentPath)
+	torrentFile, err := torrent.ReadTorrentFile(torrentPath)
 	if err != nil {
-		log.Fatal("Error reading torrent file:", err)
+		log.Fatal(err)
 	}
-	res := bencode_parser.Marshall(torrentBuff)
-	fmt.Println(res)
+	print(torrentFile)
 }

@@ -1,26 +1,33 @@
-package bencode_parser
+package torrent
 
 import (
+	"crypto/sha1"
+	"fmt"
 	"log"
 	"strconv"
 )
 
+type BencodeTrackerResp struct {
+	Interval int    `bencode:"interval"`
+	Peers    string `bencode:"peers"`
+}
+
 type Bencode struct {
-	Announce     string      `bencode:"announce"`
-	AnnounceList [][]string  `bencode:"announce-list,omitempty"`
-	Comment      string      `bencode:"comment,omitempty"`
-	CreatedBy    string      `bencode:"created by,omitempty"`
-	CreationDate int64       `bencode:"creation date,omitempty"`
-	Info         BencodeInfo `bencode:"info"`
+	Announce     string       `bencode:"announce"`
+	AnnounceList [][]string   `bencode:"announce-list,omitempty"`
+	Comment      string       `bencode:"comment,omitempty"`
+	CreatedBy    string       `bencode:"created by,omitempty"`
+	CreationDate int64        `bencode:"creation date,omitempty"`
+	Info         *BencodeInfo `bencode:"info"`
 }
 
 type BencodeInfo struct {
-	PieceLength int64  `bencode:"piece length"`
-	Pieces      string `bencode:"pieces"`
-	Private     int    `bencode:"private,omitempty"`
-	Name        string `bencode:"name"`
-	Length      int64  `bencode:"length,omitempty"`
-	Files       []File `bencode:"files,omitempty"`
+	PieceLength int64   `bencode:"piece length"`
+	Pieces      string  `bencode:"pieces"`
+	Private     int     `bencode:"private,omitempty"`
+	Name        string  `bencode:"name"`
+	Length      int64   `bencode:"length,omitempty"`
+	Files       []*File `bencode:"files,omitempty"`
 }
 
 type File struct {
@@ -28,10 +35,28 @@ type File struct {
 	Path   []string `bencode:"path"`
 }
 
-func Marshall(torrentData []byte) Bencode {
-	value, _ := parseBencodeValue(torrentData, 0)
-	bencodeMap := value.(map[string]interface{})
+func (b *Bencode) GetInfoHash() ([20]byte, error) {
+	bencodedString := EncodeTorrentInfoToBencode(b.Info)
+	return sha1.Sum([]byte(bencodedString)), nil
+}
 
+func (b *Bencode) SplitPieceHashes() ([][20]byte, error) {
+	hashLen := 20
+	pieceBuff := []byte(b.Info.Pieces)
+	if len(pieceBuff)%hashLen != 0 {
+		return nil, fmt.Errorf("received malformatted piece, invalid piece length: %d", len(pieceBuff))
+	}
+	hashes := make([][20]byte, hashLen)
+	for i := 0; i < hashLen; i++ {
+		copy(hashes[i][:], pieceBuff[i*hashLen:(i+1)*hashLen])
+	}
+	return hashes, nil
+}
+
+// UnmarshallBencode serialize the raw interface{} bencode into the bencode struct
+func UnmarshallBencode(torrentData []byte) *Bencode {
+	rawBencode, _ := parseBencodeValue(torrentData, 0)
+	bencodeMap := rawBencode.(map[string]interface{})
 	bencode := Bencode{}
 	bencode.Announce = bencodeMap["announce"].(string)
 	if announceList, ok := bencodeMap["announce-list"]; ok {
@@ -71,12 +96,21 @@ func Marshall(torrentData []byte) Bencode {
 			for _, path := range fileMap["path"].([]interface{}) {
 				f.Path = append(f.Path, path.(string))
 			}
-			info.Files = append(info.Files, f)
+			info.Files = append(info.Files, &f)
 		}
 	}
-	bencode.Info = info
+	bencode.Info = &info
 
-	return bencode
+	return &bencode
+}
+
+func UnmarshallTrackerBencodeResponse(responseData []byte) *BencodeTrackerResp {
+	rawBencode, _ := parseBencodeValue(responseData, 0)
+	bencodeMap := rawBencode.(map[string]interface{})
+	trackerResp := BencodeTrackerResp{}
+	trackerResp.Interval = int(bencodeMap["interval"].(int64))
+	trackerResp.Peers = bencodeMap["peers"].(string)
+	return &trackerResp
 }
 
 func parseBencodeValue(torrentData []byte, globalIndex int) (interface{}, int) {

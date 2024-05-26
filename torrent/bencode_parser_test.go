@@ -1,4 +1,4 @@
-package bencode_parser
+package torrent
 
 import (
 	"reflect"
